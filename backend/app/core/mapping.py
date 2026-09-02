@@ -38,6 +38,7 @@ Respond with JSON of this exact shape:
     {"field": "<field name>", "match_values": ["<value1>", "<value2>"], "why": "<short reason>"}
   ],
   "status_rules": {
+    "has_status_filter": <true if the question asks about a status/lifecycle concept like "open"/"active"/"lost", false if it just asks about deals/records in general with no status concept>,
     "include_stage_field": "<field name or null>",
     "include_stage_values": ["<stage id>"],
     "exclude_if_field_contains": {"<field name>": ["<substring>"]},
@@ -51,15 +52,19 @@ If the question has no owner/person target, set owner_target to null and return 
 owner_rules list. If the question DOES name a target person but you find no field/value in the \
 data that plausibly refers to them (checking for nicknames, typos, initials, and partial \
 matches), set owner_target to that name anyway and leave owner_rules empty - this correctly \
-produces zero matches instead of matching everything. If there's no status concept in the \
-question, return null include_stage_field and an empty exclude_if_field_contains.
+produces zero matches instead of matching everything.
 
-For status_rules, default include_stage_values to every stage id that is NOT formally closed \
-(from the pipeline stages you were given). Then actively scan every record's text fields for \
-words/patterns implying it's actually dead/lost/cold even though its stage says open (e.g. a \
-name prefixed "[DEAD LEAD]", or a description containing "DEAD"). If found, add that exact \
-substring to exclude_if_field_contains. Never rely only on the stage field without checking \
-text fields for contradicting hidden signals first."""
+If has_status_filter is false, leave include_stage_field null and exclude_if_field_contains \
+empty regardless of what you notice in the data - an unfiltered count question must include \
+every record, dead-looking or not. Only set has_status_filter true when the question itself \
+names a status/lifecycle concept (e.g. "open", "active", "lost", "closed").
+
+When has_status_filter is true: default include_stage_values to every stage id that is NOT \
+formally closed (from the pipeline stages you were given). Then actively scan every record's \
+text fields for words/patterns implying it's actually dead/lost/cold even though its stage says \
+open (e.g. a name prefixed "[DEAD LEAD]", or a description containing "DEAD"). If found, add \
+that exact substring to exclude_if_field_contains. Never rely only on the stage field without \
+checking text fields for contradicting hidden signals first."""
 
 
 def _informative_fields(schema: dict) -> list[dict]:
@@ -103,6 +108,9 @@ def _matches_owner(record: dict, owner_target: str | None, owner_rules: list[dic
 
 
 def _matches_status(record: dict, status_rules: dict) -> bool:
+    if not status_rules.get("has_status_filter"):
+        return True
+
     stage_field = status_rules.get("include_stage_field")
     stage_values = status_rules.get("include_stage_values") or []
     if stage_field and stage_values:
@@ -149,12 +157,11 @@ async def answer_question(adapter: ToolAdapter, object_type: str, question: str)
     if not records:
         note = f"No {object_type} records exist at all in this workspace."
     elif owner_target and not owner_rules:
-        checked = ", ".join(f["name"] for f in fields)
         note = (
             f"The question asks about '{owner_target}', but no field or value across the "
-            f"{len(records)} {object_type} scanned (checked: {checked}) plausibly refers to "
-            f"them - not as a formal owner, nickname, or typo. This is not a data error, "
-            f"'{owner_target}' likely isn't represented in this workspace at all."
+            f"{len(records)} {object_type} scanned plausibly refers to them - not as a formal "
+            f"owner, nickname, or typo. This is not a data error, '{owner_target}' likely "
+            f"isn't represented in this workspace at all."
         )
     elif not final_matches and owner_matches:
         note = (
