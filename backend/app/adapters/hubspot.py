@@ -59,6 +59,30 @@ class HubSpotAdapter(ToolAdapter):
             sample_records=sample_records,
         )
 
+    async def get_pipeline_stages(self, object_type: str) -> dict[str, dict]:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{BASE_URL}/crm/v3/pipelines/{object_type}", headers=self._headers()
+            )
+            resp.raise_for_status()
+            stages: dict[str, dict] = {}
+            for pipeline in resp.json().get("results", []):
+                for stage in pipeline.get("stages", []):
+                    stages[stage["id"]] = {
+                        "label": stage.get("label"),
+                        "is_closed": stage.get("metadata", {}).get("isClosed") == "true",
+                    }
+            return stages
+
+    async def get_owners(self) -> dict[str, str]:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{BASE_URL}/crm/v3/owners", headers=self._headers())
+            resp.raise_for_status()
+            return {
+                o["id"]: f"{o.get('firstName', '')} {o.get('lastName', '')}".strip()
+                for o in resp.json().get("results", [])
+            }
+
     async def query_records(
         self, object_type: str, properties: list[str], limit: int = 200
     ) -> list[dict[str, Any]]:
