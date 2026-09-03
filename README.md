@@ -3,7 +3,9 @@
 A semantic translation layer that sits between a plain-English question and a business tool's
 real, messy data structure — built for the Treelife AI technical assessment (Task 1).
 
-Ask something like *"How many open deals does Garima own?"* and Scope:
+**Live Link**: https://treelife-assignment-task1-1.onrender.com/ ([API docs](https://treelife-assignment-task1.onrender.com/docs))
+
+Ask something like _"How many open deals does Garima own?"_ and Scope:
 
 1. Discovers the connected tool's actual schema and real record data via its API (no hardcoded
    field maps).
@@ -12,9 +14,10 @@ Ask something like *"How many open deals does Garima own?"* and Scope:
    and hidden signals like a deal named `"[DEAD LEAD] ..."` that's still technically "open".
 3. Executes the resolved filters against the real data and returns a count, the matched
    records, and a plain-English explanation of its reasoning.
-4. If nothing matches, explains *why* instead of returning a misleading `0`.
+4. If nothing matches, explains _why_ instead of returning a misleading `0`.
 
 It ships with two adapters to prove the approach isn't hardcoded to one tool:
+
 - **HubSpot** (real CRM, connects with your own private-app token)
 - **A mock file-drive adapter** (in-memory demo data, no API needed) — proves the same
   reasoning code handles a completely different tool shape (folders/tags instead of a CRM
@@ -43,6 +46,7 @@ doesn't change.
 ## Setup
 
 ### Prerequisites
+
 - Python 3.10+
 - Node 20+
 - A free [HubSpot](https://app.hubspot.com) account with a private app (see below)
@@ -51,6 +55,7 @@ doesn't change.
 ### 1. HubSpot private app
 
 In HubSpot: **Settings → Integrations → Private Apps → Create a private app**. Add these scopes:
+
 - `crm.objects.deals.read`, `crm.objects.deals.write`
 - `crm.schemas.deals.read`, `crm.schemas.deals.write`
 - `crm.objects.owners.read`
@@ -68,12 +73,14 @@ pip install -r requirements.txt
 ```
 
 Create `backend/.env`:
+
 ```
 HUBSPOT_ACCESS_TOKEN=your-hubspot-token
 GROK_API_KEY=your-groq-api-key
 ```
 
 Run it:
+
 ```bash
 uvicorn app.main:app --port 8000 --reload
 ```
@@ -94,6 +101,7 @@ Open `http://localhost:5173`.
 
 The mock file-drive adapter works with no setup (no external API needed) — select
 "File Drive (demo)" in the UI, or:
+
 ```bash
 curl -X POST http://localhost:8000/ask -H "Content-Type: application/json" \
   -d '{"question": "How many active files does Priya have?", "object_type": "files", "source": "mock_drive"}'
@@ -104,6 +112,7 @@ fields, a deal whose name/description implies it's dead while its stage is still
 to see the interesting behavior — an empty account will just return `0` results honestly.
 
 Example questions:
+
 - `How many open deals does <name> own?` — tests hand-typed owner fields + hidden lost-status
 - `How many deals does <name> own?` — no status filter, includes everything regardless of state
 - `How many open deals does <someone not in your data> own?` — tests the "why nothing matched"
