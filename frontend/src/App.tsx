@@ -49,8 +49,30 @@ function App() {
   const [source, setSource] = useState<(typeof SOURCES)[number]["id"]>("hubspot");
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
+  const [wakingUp, setWakingUp] = useState(false);
   const [result, setResult] = useState<AskResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  async function fetchWithColdStartRetry(
+    path: string,
+    init: RequestInit,
+    maxAttempts = 8,
+  ): Promise<Response> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        const resp = await fetch(`${API_BASE}${path}`, { ...init, signal: controller.signal });
+        clearTimeout(timeout);
+        if (resp.ok || (resp.status < 500 && resp.status !== 0)) return resp;
+      } catch {
+        // network error or timeout — likely a cold start, fall through to retry
+      }
+      if (attempt === 1) setWakingUp(true);
+      if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, 5000));
+    }
+    throw new Error("unreachable");
+  }
 
   function handleSourceChange(next: (typeof SOURCES)[number]["id"]) {
     setSource(next);
@@ -64,11 +86,12 @@ function App() {
     if (!finalQuestion.trim()) return;
     setQuestion(finalQuestion);
     setLoading(true);
+    setWakingUp(false);
     setError(null);
     setResult(null);
     try {
       const activeSource = SOURCES.find((s) => s.id === source)!;
-      const resp = await fetch(`${API_BASE}/ask`, {
+      const resp = await fetchWithColdStartRetry("/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -77,12 +100,13 @@ function App() {
           object_type: activeSource.objectType,
         }),
       });
-      if (!resp.ok) throw new Error(`Server error: ${resp.status}`);
+      if (!resp.ok) throw new Error("bad-response");
       setResult(await resp.json());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong");
+    } catch {
+      setError("Something went wrong. Please try again in a moment.");
     } finally {
       setLoading(false);
+      setWakingUp(false);
     }
   }
 
@@ -160,6 +184,13 @@ function App() {
             ))}
           </div>
         </div>
+
+        {wakingUp && (
+          <div className="mt-5 rounded-lg border border-border bg-surface/60 px-4 py-3.5 text-center text-sm text-muted">
+            Waking up the server — this can take up to a minute on the first request after a
+            period of inactivity.
+          </div>
+        )}
 
         {error && (
           <div className="mt-5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3.5 text-red-400">
