@@ -116,6 +116,13 @@ function App() {
           ))}
         </div>
 
+        {source === "mock_drive" && (
+          <div className="mb-4 rounded-lg border border-border bg-surface/60 px-4 py-2.5 text-center text-sm text-muted">
+            Using temporary, in-memory demo data — 6 files across "Active Deals" and "Dead
+            Leads" folders, shared with Priya, Rohan, and Ishan. No external API involved.
+          </div>
+        )}
+
         <div className="rounded-2xl border border-border bg-surface p-5 shadow-lg shadow-black/20">
           <div className="flex gap-2.5">
             <input
